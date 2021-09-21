@@ -112,6 +112,12 @@ class OAuth2Client:
         self._user_cache.update({user.id: user})
         return user
 
+    async def getch_user(self, user_id, access_token_response: AccessTokenResponse) -> User:
+        user = self._user_cache.get(user_id)
+        if not user:
+            user = await self.fetch_user(access_token_response)
+        return user
+
     def get_user(self, id: int) -> Optional[User]:
         """Gets a user from the cache. The cache is a WeakValueDictionary, so objects may be removed without notice.
 
