@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Optional
 
 from .http import HTTPClient, Route
 from .guild import Guild
@@ -9,9 +9,7 @@ if TYPE_CHECKING:
     from .token import AccessTokenResponse
 
 
-__all__: tuple = (
-    "User",
-)
+__all__: tuple = ("User",)
 
 
 class User:
@@ -39,22 +37,25 @@ class User:
     refresh_token: str
         The refresh token to refresh the access token
     """
+
     def __init__(self, *, http: HTTPClient, data: dict, acr: AccessTokenResponse):
         self._data = data
         self._http = http
         self._acr: AccessTokenResponse = acr
 
         self._avatar_hash = self._data.get("avatar")
-        self._avatar_format = "gif" if self._avatar_hash.startswith("a") else "png"
+        self._avatar_format = None if not self._avatar_hash else "gif" if self._avatar_hash.startswith("a") else "png"
 
-        self.id: int = int(self._data.get("id"))
-        self.name: str = self._data.get("username")
-        self.avatar_url: str = "https://cdn.discordapp.com/avatars/{0.id}/{0._avatar_hash}.{0._avatar_format}".format(self)
-        self.discriminator: int = int(self._data.get("discriminator"))
-        self.mfa_enabled: bool = self._data.get("mfa_enabled")
-        self.email: str = self._data.get("email")
-        self.verified: bool = self._data.get("verified")
-        self.access_token: str = self._acr.token
+        self.id: int = int(self._data.get("id", 0))
+        self.name: Optional[str] = self._data.get("username")
+        self.avatar_url: Optional[str] = None if not self._avatar_hash else "https://cdn.discordapp.com/avatars/{0.id}/{0._avatar_hash}.{0._avatar_format}".format(
+            self
+        )
+        self.discriminator: int = int(self._data.get("discriminator", 0000))
+        self.mfa_enabled: Optional[bool] = self._data.get("mfa_enabled")
+        self.email: Optional[str] = self._data.get("email")
+        self.verified: Optional[bool] = self._data.get("verified")
+        self.access_token: Optional[str] = self._acr.token
         self.refresh_token: str = self._acr.refresh_token
 
         self.guilds: List[Guild] = []  # this is filled in when fetch_guilds is called
@@ -93,7 +94,7 @@ class User:
 
         :param refresh: Whether or not to refresh the guild cache attached to this user object. If false, returns the cached guilds, defaults to True
         :type refresh: bool, optional
-        :return: A List of Guild objects either from cache or returned from the api call 
+        :return: A List of Guild objects either from cache or returned from the api call
         :rtype: List[Guild]
         """
         if not refresh and self.guilds:
@@ -108,5 +109,3 @@ class User:
             self.guilds.append(guild)
 
         return self.guilds
-
-    
