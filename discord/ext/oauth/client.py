@@ -1,18 +1,12 @@
-import weakref
+from typing import Any, Dict, List, Optional, Union
 
-from typing import Optional, Union, List
+from .http import HTTPClient, Route
+from .models import User, TokenResponse
 
-from .http import Route, HTTPClient
-from .token import AccessTokenResponse
-from .user import User
-
-
-__all__: tuple = (
-    "OAuth2Client",
-)
+__all__: tuple = ("OAuth2Client",)
 
 
-DISCORD_URL = 'https://discord.com'
+DISCORD_URL = "https://discord.com"
 # API_URL = DISCORD_URL + '/api/v8'
 
 
@@ -20,13 +14,14 @@ class OAuth2Client:
     """
     A class representing a client interacting with the discord OAuth2 API.
     """
+
     def __init__(
         self,
         *,
         client_id: int,
         client_secret: str,
         redirect_uri: str,
-        scopes: Optional[List[str]] = None
+        scopes: Optional[List[str]] = None,
     ):
         """A class representing a client interacting with the discord OAuth2 API.
 
@@ -54,21 +49,22 @@ class OAuth2Client:
             }
         )
 
-        self._user_cache = weakref.WeakValueDictionary()
-
     def auth(self, state: Optional[str] = None, prompt: Optional[str] = None):
-        client_id = f'client_id={self._id}'
-        redirect_uri = f'redirect_uri={self._redirect}'
-        scopes = f'scope={self._scopes}'
-        response_type = 'response_type=code'
-        url = DISCORD_URL + f'/api/oauth2/authorize?{client_id}&{redirect_uri}&{scopes}&{response_type}'
+        client_id = f"client_id={self._id}"
+        redirect_uri = f"redirect_uri={self._redirect}"
+        scopes = f"scope={self._scopes}"
+        response_type = "response_type=code"
+        url = (
+            DISCORD_URL
+            + f"/api/oauth2/authorize?{client_id}&{redirect_uri}&{scopes}&{response_type}"
+        )
         if state:
-            url += f'&state={state}'
+            url += f"&state={state}"
         if prompt:
-            url += f'&prompt={prompt}'
+            url += f"&prompt={prompt}"
         return url
 
-    async def exchange_code(self, code: str) -> AccessTokenResponse:
+    async def exchange_code(self, code: str) -> TokenResponse:
         """Exchanges the code you receive from the OAuth2 redirect.
 
         :param code: The code you've received from the OAuth2 redirect
@@ -86,21 +82,20 @@ class OAuth2Client:
         }
         if self._scopes is not None:
             post_data["scope"] = self._scopes
-        request_data = await self.http.request(route, data=post_data)
-        token_resp = AccessTokenResponse(data=request_data)
+        resp = await self.http.request(route, data=post_data)
+        token_resp = TokenResponse(data=resp)
         return token_resp
 
-    async def refresh_token(self, refresh_token: Union[str, AccessTokenResponse]) -> AccessTokenResponse:
+    async def refresh_token(
+        self, refresh_token: str
+    ) -> Dict[str, Any]:
         """Refreshes an access token. Takes either a string or an AccessTokenResponse.
 
         :param refresh_token: The refresh token you received when exchanging a redirect code
         :type refresh_token: Union[str, AccessTokenResponse]
         :return: A new access token response containg information about the refreshed access token
-        :rtype: AccessTokenResponse
+        :rtype: Dict[str, Any]
         """
-        if isinstance(refresh_token, AccessTokenResponse):
-            refresh_token = str(refresh_token.token)
-
         route = Route("POST", "/oauth2/token")
         post_data = {
             "client_id": self._id,
@@ -108,11 +103,11 @@ class OAuth2Client:
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
         }
-        request_data = await self.http.request(route, data=post_data)
-        token_resp = AccessTokenResponse(data=request_data)
-        return token_resp
+        return await self.http.request(route, data=post_data)
 
-    async def fetch_user(self, access_token_response: AccessTokenResponse) -> User:
+    async def identify(
+        self, token: Union[str, TokenResponse]
+    ) -> User:
         """Makes an api call to fetch a user using their access token.
 
         :param access_token_response: A class holding information about an access token
@@ -120,33 +115,24 @@ class OAuth2Client:
         :return: Returns a User object holding information about the select user
         :rtype: User
         """
-        access_token = access_token_response.token
+        access_token = token
+        if isinstance(access_token, TokenResponse):
+            access_token = token.access_token
+
         route = Route("GET", "/users/@me")
         headers = {"Authorization": "Bearer {}".format(access_token)}
         resp = await self.http.request(route, headers=headers)
-        user = User(http=self.http, data=resp, acr=access_token_response)
-        self._user_cache.update({user.id: user})
+        user = User(http=self.http, data=resp, acr=token)
         return user
 
-    async def getch_user(self, user_id, access_token_response: AccessTokenResponse) -> User:
-        user = self._user_cache.get(user_id)
-        if not user:
-            user = await self.fetch_user(access_token_response)
-        return user
+    async def guilds(self, token: Dict[str, Any]) -> Dict[str, Any]:
+        access_token = token["access_token"]
 
-    def get_user(self, id: int) -> Optional[User]:
-        """Gets a user from the cache. The cache is a WeakValueDictionary, so objects may be removed without notice.
-
-        :param id: The id of the user you want to get
-        :type id: int
-        :return: A possible user object. Returns None if no User is found in cache.
-        :rtype: Optional[User]
-        """
-        user = self._user_cache.get(id)
-        return user
+        route = Route("GET", "/users/@me/guilds")
+        headers = {"Authorization": "Bearer {}".format(access_token)}
+        guilds = await self.http.request(route, headers=headers)
+        return guilds
 
     async def close(self):
-        """Closes and performs cleanup operations on the client, such as clearing its cache.
-        """
-        self._user_cache.clear()
+        """Closes and performs cleanup operations on the client, such as clearing its cache."""
         await self.http.close()
