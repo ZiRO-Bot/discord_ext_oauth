@@ -12,6 +12,10 @@ __all__: tuple = (
 )
 
 
+DISCORD_URL = 'https://discord.com'
+# API_URL = DISCORD_URL + '/api/v8'
+
+
 class OAuth2Client:
     """
     A class representing a client interacting with the discord OAuth2 API.
@@ -52,6 +56,18 @@ class OAuth2Client:
 
         self._user_cache = weakref.WeakValueDictionary()
 
+    def auth(self, state: Optional[str] = None, prompt: Optional[str] = None):
+        client_id = f'client_id={self._id}'
+        redirect_uri = f'redirect_uri={self._redirect}'
+        scopes = f'scope={self._scopes}'
+        response_type = 'response_type=code'
+        url = DISCORD_URL + f'/api/oauth2/authorize?{client_id}&{redirect_uri}&{scopes}&{response_type}'
+        if state:
+            url += f'&state={state}'
+        if prompt:
+            url += f'&prompt={prompt}'
+        return url
+
     async def exchange_code(self, code: str) -> AccessTokenResponse:
         """Exchanges the code you receive from the OAuth2 redirect.
 
@@ -82,9 +98,9 @@ class OAuth2Client:
         :return: A new access token response containg information about the refreshed access token
         :rtype: AccessTokenResponse
         """
-        refresh_token = (
-            refresh_token if isinstance(refresh_token, str) else refresh_token.token
-        )
+        if isinstance(refresh_token, AccessTokenResponse):
+            refresh_token = str(refresh_token.token)
+
         route = Route("POST", "/oauth2/token")
         post_data = {
             "client_id": self._id,
