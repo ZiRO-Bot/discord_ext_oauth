@@ -106,7 +106,7 @@ class OAuth2Client:
         return await self.http.request(route, data=post_data)
 
     async def identify(
-        self, token: Union[str, TokenResponse]
+        self, token: Union[Dict[str, Any], TokenResponse]
     ) -> User:
         """Makes an api call to fetch a user using their access token.
 
@@ -115,9 +115,10 @@ class OAuth2Client:
         :return: Returns a User object holding information about the select user
         :rtype: User
         """
-        access_token = token
-        if isinstance(access_token, TokenResponse):
-            access_token = token.access_token
+        if not isinstance(token, TokenResponse):
+            token = TokenResponse(data=token)
+
+        access_token = token.access_token
 
         route = Route("GET", "/users/@me")
         headers = {"Authorization": "Bearer {}".format(access_token)}
